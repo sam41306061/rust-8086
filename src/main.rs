@@ -1,202 +1,113 @@
-// Import necessary libraries and modules
-use std::fs::File;
-use std::io::{self, Read};
+use std::env;
+use std::fs;
 
+const REG_MEM_00_01_10:[&str; 8] = [
+    "bx + si",
+    "bx + di",
+    "bp + si",
+    "bp + di",
+    "si",
+    "di",
+    "bp",
+    "bx",
+];
+const REG_MEM_11:[[&str; 2]; 8] = [
+    ["al", "ax"],
+    ["cl", "cx"],
+    ["dl", "dx"],
+    ["bl", "bx"],
+    ["ah", "sp"],
+    ["ch", "bp"],
+    ["dh", "si"],
+    ["bh", "di"],
+];
 
-
-// Define the structure to represent the 8086 registers
-#[derive(Debug)] 
-struct CPU {
-    // 16-bit general purpose registers
-    ax: u16, // AX register
-    bx: u16, // BX register
-    cx: u16, // CX register
-    dx: u16, // DX register
-
-    //Segment registers
-    si: u16, // Source Index
-    di: u16, // Destination Index
-    bp: u16, // Base Pointer
-    sp: u16, // Stack Pointer
-
-    // Memory array
-     memory: [u8; 1024], // Example memory size
-}
-
-impl CPU {
-    // Function to create a new CPU instance
-    fn new() -> CPU {
-        // Initialize registers and memory
-        CPU { 
-            ax: 0, bx: 0, cx: 0, dx: 0, 
-            si: 0, di: 0, bp: 0, sp: 0, 
-            memory: [0; 1024]
-        }
-    }
-
-    // Function to reset the CPU
-    fn reset(&mut self) {
-        // Reset all registers and memory
-        self.ax = 0;
-        self.bx = 0;
-        self.cx = 0;
-        self.dx = 0;
-        self.si = 0;
-        self.di = 0;
-        self.bp = 0;
-        self.sp = 0;
-        self.memory = [0; 1024];
-    }
-}
-
-// Define the structure to represent memory
-struct Memory {
-     memory: [u8; 1024], // Example memory size
-}
-
-impl Memory {
-    // Function to create a new Memory instance
-    fn new() -> Memory {
-        // Initialize memory
-        Memory { memory: [0; 1024] }
-    }
-
-    // Function to read from memory
-    fn read(&self, address: usize, size: usize) -> &[u8] {
-        // Return a slice of memory
-        &self.memory[address..address + size]
-    }
-
-    // Function to write to memory
-    fn write(&mut self, address: usize, data: &[u8]) {
-        // Write data to memory at the specified address
-         for (i, &byte) in data.iter().enumerate() {
-             self.memory[address + i] = byte;
-         }
-    }
-}
-
-// Define the structure to represent instructions
-struct Instruction {
-    opcode: u8, // Opcode for the instruction
-    w: bool, // W bit for instruction size (8-bit or 16-bit)
-    reg: u8, // Register operand
-    rm: u8, // Register/memory operand
-}
-
-impl Instruction {
-    // Function to decode an instruction from a binary stream
-    fn decode(bytes: &[u8]) -> Instruction {
-        // Decode the instruction fields from the byte stream
-        Instruction { 
-            opcode: bytes[0], 
-            w: (bytes[1] & 0b10000000) != 0, 
-            reg: (bytes[1] >> 3) & 0b111, 
-            rm: bytes[1] & 0b111 
-        }
-    }
-
-    // Function to execute the decoded instruction
-    fn execute(&self, cpu: &mut CPU) {
-        // Execute the instruction based on the decoded fields
-        // For now, we'll just handle a basic MOV instruction
-        if self.opcode == 0b10001000 {
-            if self.w {
-                // 16-bit move
-                let src = match self.reg {
-                    0 => cpu.ax,
-                    1 => cpu.cx,
-                    2 => cpu.dx,
-                    3 => cpu.bx,
-                    4 => cpu.sp,
-                    5 => cpu.bp,
-                    6 => cpu.si,
-                    7 => cpu.di,
-                    _ => 0,
-                };
-                match self.rm {
-                    0 => cpu.ax = src,
-                    1 => cpu.cx = src,
-                    2 => cpu.dx = src,
-                    3 => cpu.bx = src,
-                    4 => cpu.sp = src,
-                    5 => cpu.bp = src,
-                    6 => cpu.si = src,
-                    7 => cpu.di = src,
-                    _ => (),
-                }
-            } else {
-                // 8-bit move (AL/AX)
-                let src = (cpu.ax & 0xFF) as u8;
-                match self.rm {
-                    0 => cpu.ax = (cpu.ax & 0xFF00) | src as u16,
-                    _ => (),
-                }
-            }
-        }
-    }
-}
-
-// Function to load binary instruction files into memory
-fn load_binary(file_path: &str, memory: &mut Memory) -> io::Result<()> {
-    // Open the binary file
-     let mut file = File::open(file_path)?;
-
-    // create a buf for the read in file 
-    let mut buffer = Vec::new();
-
-    // Read the file into the buffer
-     file.read_to_end(&mut buffer)?;
-    
-    // Return success
-     Ok(())
-}
-
-// Unit test to validate the instruction decoding process
-#[test]
-fn test_instruction_decode() {
-    // Initialize test data
-    let bytes: [u8; 2] = [0b10110000, 0b11000000]; // Example instruction
-    let instruction = Instruction::decode(&bytes);
-    
-    // Validate the decoded instruction fields
-    assert_eq!(instruction.opcode, 0b10110000);
-    assert_eq!(instruction.w, true);
-    assert_eq!(instruction.reg, 0b011);
-    assert_eq!(instruction.rm, 0b000);
-}
-
-// Unit test to validate the CPU execution process
-#[test]
-fn test_cpu_execution() {
-    // Initialize the CPU and memory
-     let mut cpu = CPU::new();
-     let mut memory = Memory::new();
-    
-     // Load test binary file into memory
-     load_binary("test_files/listing_37.bin", &mut memory).unwrap();
-    
-    // Decode and execute instructions
-     let instruction = Instruction::decode(&memory.read(0, 2));
-     instruction.execute(&mut cpu);
-    
-    // Validate the CPU state after execution
-     assert_eq!(cpu.ax, 0x1234); // Example expected result
-}
+const MOV_REG_MEM_TO_FRO_MEM: (u8, u8) = (0b00100010, 2);
+const MOV_IMM_TO_REG: (u8, u8) = (0b00001011, 4);
 
 fn main() {
-    // Initialize the CPU and memory
-     let mut cpu = CPU::new();
-     let mut memory = Memory::new();
-    
-    // Load binary file into memory
-    load_binary("l_0037_single_register_mov.asm", &mut memory).unwrap();
-    
-    // Decode and execute instructions
-    let instruction = Instruction::decode(&memory.read(0, 2));
-     instruction.execute(&mut cpu);
-    
-    // Print CPU state for debugging
-    println!("{:?}", cpu);
-}
+    let args: Vec<String> = env::args().collect();
+    let loaded_bytes: Vec<u8> = fs::read(&args[1])
+        .expect("Error reading file");
 
+    let mut output = String::from("bits 16\n\n");
+
+    let mut index = 0;
+    while index < loaded_bytes.len() {
+        let mut index_increment = 0;
+
+        let instruction_byte = loaded_bytes[index];
+        let op = "mov";
+        let w;
+        let reg;
+
+        if (instruction_byte >> MOV_REG_MEM_TO_FRO_MEM.1) == MOV_REG_MEM_TO_FRO_MEM.0 {
+            index_increment += 2;
+
+            let second_byte = loaded_bytes[index+1];
+            w = instruction_byte & 0b1;
+            reg = (second_byte >> 3) & 0b111;
+            let d = (instruction_byte >> 1) & 0b1; 
+            let mod_field = (second_byte >> 6) & 0b11;
+            let r_m = second_byte & 0b111;
+
+            let r_m_value:String = match mod_field { 
+                0b00 => {
+                    if r_m == 6 {
+                        index_increment += 2;
+                        "DIRECT ACCESS".to_string()
+                    }
+                    else {
+                        format!("[{}]", REG_MEM_00_01_10[r_m as usize])
+                    }
+                },
+                0b01 => {
+                    index_increment += 1;
+                    format!("[{} + {}]", REG_MEM_00_01_10[r_m as usize], loaded_bytes[index+2])
+                },
+                0b10 => {
+                    index_increment += 2;
+                    let value:i16 = ((loaded_bytes[index+3] as i16) << 8) | ((loaded_bytes[index+2] as i16));
+                    format!("[{} + {}]", REG_MEM_00_01_10[r_m as usize], value)
+                },
+                0b11 => {
+                    REG_MEM_11[r_m as usize][w as usize].to_string()
+                },
+                other => {
+                    panic!("Invalid mod value: {}", other)
+                },
+            };
+
+            if d == 0b1 {
+                output += &format!("{} {}, {}\n", op, REG_MEM_11[reg as usize][w as usize], r_m_value);
+            } else {
+                output += &format!("{} {}, {}\n", op, r_m_value, REG_MEM_11[reg as usize][w as usize]);
+            }
+
+        } else if (instruction_byte >> MOV_IMM_TO_REG.1) == MOV_IMM_TO_REG.0 {
+            w = (instruction_byte >> 3) & 0b1;
+            reg = instruction_byte & 0b111;
+
+            let immediate_value:i16 = match w {
+                0b0 => {
+                    index_increment += 2;
+                    loaded_bytes[index+1] as i16
+                },
+                0b1 => {
+                    index_increment += 3;
+                    ((loaded_bytes[index+2] as i16) << 8) | (loaded_bytes[index+1] as i16)
+                },
+                other => panic!("Invalid w value: {}", other)
+            };
+
+            output += &format!("{} {}, {}\n", op, REG_MEM_11[reg as usize][w as usize], immediate_value);
+
+        } else {
+            panic!("Unrecognized operation");
+        }
+
+        index += index_increment;
+    }
+
+    println!("{}", output);
+}
