@@ -1,0 +1,18 @@
+{
+  "name": "rust-8086",
+  "version": "1.0.0",
+  "description": "Building a simulated CPU based on the intel 8086 specs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "ts-node": "npx ts-node src/ts/index.ts "
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^20.14.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.3"
+  }
+}
